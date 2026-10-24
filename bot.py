@@ -5,6 +5,7 @@ import datetime
 import base64
 import httpx
 import threading
+import time
 from flask import Flask
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -13,20 +14,24 @@ from aiogram.types import CallbackQuery
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# --- SETTINGS ---
-BOT_TOKEN = os.getenv("BOT_TOKEN") # Теперь берем из Render
-OPENROUTER_KEY = os.getenv("OPENROUTER_KEY") # Берем из Render
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+OPENROUTER_KEY = os.getenv("OPENROUTER_KEY")
 CREDENTIALS_FILE = "credentials.json"
 SPREADSHEET_NAME = "Fuelbot"
 MODEL_ID = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
-# --- FLASK (Для Render) ---
+# --- FLASK SETUP ---
 app = Flask(__name__)
 
 @app.route('/')
 @app.route('/health')
 def health():
     return "Bot is running", 200
+
+def run_flask():
+    # Render выдает порт в переменной PORT
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
 # --- GOOGLE SHEETS ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -78,7 +83,7 @@ async def handle_photo(message: types.Message):
             )
         
         if response.status_code != 200:
-            raise Exception(f"HTTP {response.status_code}")
+            raise Exception(f"HTTP {response.status_code}: {response.text}")
             
         raw_text = response.json()['choices'][0]['message']['content']
         if "```json" in raw_text:
@@ -125,13 +130,11 @@ async def process_reject(callback: CallbackQuery):
     await callback.message.edit_text("Canceled. Send photo again.")
     await callback.answer()
 
-# --- ЗАПУСК БОТА В ФОНЕ ---
-def run_bot():
-    asyncio.run(dp.start_polling(bot))
+async def main():
+    # Запускаем Flask в фоновом потоке (чтобы он отвечал Render)
+    threading.Thread(target=run_flask, daemon=True).start()
+    # Запускаем бота в основном потоке (чтобы не было ошибки сигналов)
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    # Запускаем бота в отдельном потоке
-    threading.Thread(target=run_bot, daemon=True).start()
-    # Запускаем Flask для Render (слушаем порт)
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    asyncio.run(main())
