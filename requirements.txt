@@ -1,0 +1,5 @@
+aiogram
+httpx
+gspread
+oauth2client
+flask
