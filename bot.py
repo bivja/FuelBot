@@ -52,20 +52,21 @@ You are an OCR system. Extract data from the image and return ONLY JSON:
 async def start(message: types.Message):
     await message.answer("Send photo.")
 
-# ВАЖНО: В группах бот будет реагировать на фото ТОЛЬКО если его упомянут или ответят на его сообщение
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
-    # Проверка для групп: если это группа и бот не упомянут, игнорируем
+    # === ИСПРАВЛЕННАЯ ПРОВЕРКА ДЛЯ ГРУПП ===
     if message.chat.type in ["group", "supergroup"]:
-        # Проверяем, есть ли упоминание бота в тексте сообщения (если есть подпись) или это ответ на сообщение бота
+        # Ищем упоминание в подписи (тексте под фото)
         is_mentioned = False
-        if message.caption and f"@{bot.me.username}" in message.caption:
+        if message.caption and "@RefuelTracker_Bot" in message.caption:
             is_mentioned = True
+        
+        # Проверяем, является ли сообщение ответом на сообщение бота
         if message.reply_to_message and message.reply_to_message.from_user.id == bot.id:
             is_mentioned = True
         
         if not is_mentioned:
-            return  # Игнорируем фото в группе, если бот не упомянут
+            return  # Игнорируем, если бот не упомянут и это не ответ
 
     msg = await message.answer("Loading...")
     
